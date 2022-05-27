@@ -11,6 +11,11 @@ const utils = require('./utils');
 // reuse SSL connection
 const https = require('https');
 const httpsAgent = new https.Agent({ keepAlive: true });
+const myHeader = {
+  // 'referer':'https://weibo.com/u/2828274924'
+  'Cookie':'WEIBOCN_FROM=1110006030; _T_WM=27931205976; SCF=AhKyOOGHxZyuRzBouy0ac8kmYHj-IAQPYaZf6hugvY_WCZCou2VFQjyIlGd_lmwMvC8nNr2zUM1zFo6NZTeN9q8.; SUB=_2A25PlFiuDeRhGeRK41UW-SrKwzyIHXVtd3jmrDV6PUJbktB-LWTukW1NU0jyUxTU7ZK-yKDXShaRFJ0a4ruvjHfq; SUBP=0033WrSXqPxfM725Ws9jqgMF55529P9D9W54p-CG_-4IdiiM9LhVCJhD5JpX5K-hUgL.FozX1hMN1KBc1h52dJLoI7RLxK.LBoBL1hLuqg9uqBtt; SSOLoginState=1653614848; ALF=1656206848; MLOGIN=1; XSRF-TOKEN=a2771e; M_WEIBOCN_PARAMS=luicode%3D10000011%26lfid%3D1076032828274924%26fid%3D1005052828274924%26uicode%3D10000011'
+  ,'User-Agent':`Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1`
+}
 
 const axiosInstance = axios.create({
   timeout: 3000,
@@ -81,6 +86,7 @@ exports.getUIDByDomain = function (domain) {
     timeout: 3000,
     headers: {
       'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Mobile/15E148 Safari/604.1'
+      ,...myHeader
     },
   }).then(res => {
     const uid = res.request.path.split("/u/")[1];
@@ -199,6 +205,7 @@ async function getByIndexAPI(uid) {
         'Referer': `https://m.weibo.cn/u/${uid}`,
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Mobile/15E148 Safari/604.1',
         'X-Requested-With': 'XMLHttpRequest'
+        ,...myHeader
       }
     }).then(({ data }) => {
       const statuses = data.data.cards
@@ -237,6 +244,7 @@ async function getIndexUserInfo(uid) {
   let userNotExist = false;
   const cacheKey = `info-${uid}`;
   let cacheResult = await cache.get(cacheKey);
+  console.log('cacheResult',cacheResult)
   if (cacheResult) {
     logger.debug(`getUserInfo: ${uid} hit cache`);
     return {
@@ -246,16 +254,21 @@ async function getIndexUserInfo(uid) {
   }
   // wait queue
   await indexAPIQueue.add(utils.delayFunc(Math.floor(Math.random() * 100)));
+
+  const header = {
+    'MWeibo-Pwa': 1,
+    'Referer': `https://m.weibo.cn/u/${uid}`,
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Mobile/15E148 Safari/604.1',
+    'X-Requested-With': 'XMLHttpRequest'
+    ,...myHeader
+  }
+  
   const userInfo = await axiosInstance({
     method: 'get',
     url: `https://m.weibo.cn/api/container/getIndex?type=uid&value=${uid}`,
-    headers: {
-      'MWeibo-Pwa': 1,
-      'Referer': `https://m.weibo.cn/u/${uid}`,
-      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Mobile/15E148 Safari/604.1',
-      'X-Requested-With': 'XMLHttpRequest'
-    }
+    headers: header
   }).then(({ data }) => {
+    // console.log('getUserInfo: data',data)
     if (data.ok !== 1) {
       userNotExist = true;
       return;
@@ -265,6 +278,7 @@ async function getIndexUserInfo(uid) {
       description: data.data.userInfo.description,
       containerid: data.data.tabsInfo.tabs[1].containerid,
     };
+    console.log('getUserInfo: result',result)
     cache.set(cacheKey, result, userinfoExpire);
     return result;
   });
@@ -323,6 +337,7 @@ async function getWeiboDetail(id) {
       'Referer': `https://m.weibo.cn/detail/${id}`,
       'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Mobile/15E148 Safari/604.1',
       'X-Requested-With': 'XMLHttpRequest'
+      ,...myHeader
     }
   }).then(res => {
     data = res.data.data;
